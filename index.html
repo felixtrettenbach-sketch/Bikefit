@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BikeFit – Videobasiertes Rennrad-Fitting</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚴</text></svg>" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header>
+    <h1>🚴 BikeFit</h1>
+    <p class="tagline">
+      Videobasiertes Rennrad-Fitting mit wissenschaftlich fundierten Zielbereichen –
+      Auswertung läuft vollständig lokal im Browser.
+    </p>
+  </header>
+
+  <main>
+    <!-- Schritt 1: Maße -->
+    <section class="card">
+      <h2>1. Maße</h2>
+      <p class="muted">
+        Körpermaße werden für die geometrische Umrechnung von Winkelabweichungen in
+        Millimeter (Segmentlängen nach Winter 2009) und für die klassischen
+        Sattelhöhen-Formeln benötigt. Radmaße sind optional, verbessern aber die
+        Empfehlungen.
+      </p>
+      <div class="grid">
+        <label>Körpergröße (cm) *
+          <input id="inHeight" type="number" min="120" max="220" placeholder="z.B. 182" />
+        </label>
+        <label>Schrittlänge / Innenbeinlänge (cm) *
+          <input id="inInseam" type="number" min="50" max="110" step="0.5" placeholder="z.B. 86" />
+        </label>
+        <label>Fahrertyp / Ziel
+          <select id="inGoal">
+            <option value="comfort">Komfort / Einsteiger</option>
+            <option value="endurance" selected>Endurance / Langstrecke</option>
+            <option value="race">Sportlich / Race</option>
+          </select>
+        </label>
+        <label>Kurbellänge (mm)
+          <input id="inCrank" type="number" min="150" max="185" step="2.5" placeholder="z.B. 172.5" />
+        </label>
+        <label>Aktuelle Sattelhöhe, Tretlagermitte → Satteloberkante (mm)
+          <input id="inSaddle" type="number" min="500" max="900" placeholder="z.B. 745" />
+        </label>
+        <label>Sattel-Setback hinter Tretlagerlot (mm)
+          <input id="inSetback" type="number" min="-30" max="120" placeholder="z.B. 55" />
+        </label>
+        <label>Sattel-Lenker-Überhöhung (mm)
+          <input id="inDrop" type="number" min="-60" max="180" placeholder="z.B. 60" />
+        </label>
+      </div>
+      <details>
+        <summary>So misst du die Schrittlänge korrekt</summary>
+        <p>
+          Ohne Schuhe mit dem Rücken an eine Wand stellen, ein Buch waagerecht fest in
+          den Schritt ziehen (Druck wie beim Sitzen auf dem Sattel) und den Abstand von
+          der Buch-Oberkante bis zum Boden messen.
+        </p>
+      </details>
+    </section>
+
+    <!-- Schritt 2: Aufnahmen -->
+    <section class="card">
+      <h2>2. Aufnahmen</h2>
+      <p class="muted">
+        Rad auf eine Rolle/einen Trainer stellen. Kamera exakt <strong>seitlich</strong>,
+        auf Hüfthöhe, ca. 2–3 m Abstand, der ganze Fahrer muss im Bild sein. In normaler
+        Trittfrequenz (80–90 U/min) und gewohnter Haltung mindestens 15–20 Sekunden
+        pedalieren – am besten mehrere Aufnahmen (Unterlenker, Oberlenker, nach
+        Belastung).
+      </p>
+      <div class="capture-controls">
+        <label class="btn">
+          📁 Video(s) hochladen
+          <input id="fileInput" type="file" accept="video/*" multiple hidden />
+        </label>
+        <button id="btnWebcam" class="btn">🎥 Webcam starten</button>
+        <button id="btnWebcamStop" class="btn stop" hidden>⏹ Webcam stoppen &amp; übernehmen</button>
+      </div>
+      <p id="captureStatus" class="status">Pose-Modell wird geladen …</p>
+      <div class="stage">
+        <video id="video" playsinline hidden></video>
+        <canvas id="overlay"></canvas>
+        <p id="liveAngles" class="live"></p>
+      </div>
+      <ul id="recordingList" class="recordings"></ul>
+      <button id="btnAnalyze" class="btn primary" disabled>🔬 Ausgangslage auswerten</button>
+    </section>
+
+    <!-- Schritt 3: Ergebnis -->
+    <section class="card" id="results" hidden>
+      <h2>3. Ausgangslage &amp; Bewertung</h2>
+      <p id="pedallingWarning" class="warning" hidden>
+        ⚠️ In den Aufnahmen wurde kaum Kniebewegung erkannt – bitte während der Aufnahme
+        durchgehend pedalieren, sonst sind Totpunkt-Winkel nicht bestimmbar.
+      </p>
+      <p id="summaryMeta" class="muted"></p>
+      <table class="findings">
+        <thead>
+          <tr><th>Messgröße</th><th>Messwert</th><th>Zielbereich</th><th>Bewertung</th></tr>
+        </thead>
+        <tbody id="findingsBody"></tbody>
+      </table>
+
+      <h3>Kniebeugung über die Aufnahme</h3>
+      <div class="chart-wrap"><canvas id="kneeChart"></canvas></div>
+      <p class="muted">
+        Grünes Band = dynamischer Zielbereich der Kniebeugung am unteren Totpunkt
+        (30–40°). Die Wellentäler der Kurve sollten im Band liegen.
+      </p>
+
+      <h2>4. Empfehlungen</h2>
+      <ul id="recList" class="rec-list"></ul>
+      <p class="warning">
+        ⚠️ Änderungen immer einzeln und in kleinen Schritten (≤ 5 mm) vornehmen, danach
+        neu aufnehmen und auswerten. Bei bestehenden Schmerzen oder Taubheitsgefühlen
+        ärztlichen bzw. professionellen Bike-Fitting-Rat einholen – diese App ersetzt
+        keine medizinische Beratung.
+      </p>
+
+      <h3>Anthropometrische Startwert-Formeln (Vergleich)</h3>
+      <ul id="formulaList"></ul>
+      <p class="muted">
+        Formeln liefern nur Startwerte; die dynamische Winkelmessung am Fahrer ist der
+        genauere Maßstab (Bini 2011, Ferrer-Roca 2012).
+      </p>
+
+      <h2>Wissenschaftliche Referenzen</h2>
+      <ol id="refList" class="refs"></ol>
+
+      <h3>Methodik &amp; Grenzen</h3>
+      <ul class="muted small">
+        <li>2D-Videoanalyse (MediaPipe Pose): Winkel werden in der Bildebene gemessen.
+          Eine nicht exakt senkrechte Kameraausrichtung zur Fahrerebene verfälscht die
+          Winkel (Parallaxe) – Kamera daher exakt seitlich und auf Hüfthöhe positionieren.</li>
+        <li>Totpunkt-Winkel werden als 5./95. Perzentil der Zeitreihe bestimmt – robust
+          gegenüber einzelnen Fehldetektionen.</li>
+        <li>Dynamisch gemessene Winkel liegen systematisch über statischen
+          Goniometer-Werten; die Zielbereiche hier sind entsprechend dynamische Bereiche
+          (Ferrer-Roca et al. 2012).</li>
+        <li>Empfohlene mm-Änderungen sind geometrische Näherungen auf Basis
+          anthropometrischer Segmentlängen (Winter 2009) und dienen als Orientierung.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <p class="muted small">
+      BikeFit – alle Videodaten bleiben auf deinem Gerät. Pose-Erkennung und Modell
+      laufen lokal im Browser; es werden keine Aufnahmen hochgeladen.
+    </p>
+  </footer>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
